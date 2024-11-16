@@ -1,0 +1,31 @@
+name: Download and Push Files
+
+on:
+  workflow_dispatch: # Allows manual triggering of the workflow
+
+jobs:
+  download-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Checkout the current repository
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    # Download all files from the specified URL
+    - name: Download Files
+      run: |
+        mkdir downloads
+        cd downloads
+        wget --no-parent --recursive --accept '*' https://www.cafopfm.gov.bd/uploads/
+        ls -al
+
+    # Add the downloaded files to the repository
+    - name: Add Files to Repo
+      run: |
+        cp -r downloads/* .
+        git config --global user.name "${{ github.actor }}"
+        git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+        git add .
+        git commit -m "Add downloaded files from https://www.cafopfm.gov.bd/uploads/"
+        git push
