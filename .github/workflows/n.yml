@@ -12,13 +12,73 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v3
 
-    # Download all files from the specified URL
+    # Install Python and necessary libraries
+    - name: Set up Python Environment
+      run: |
+        sudo apt update
+        sudo apt install -y python3 python3-pip
+        pip3 install requests
+
+    # Download files using multithreaded Python script
     - name: Download Files
       run: |
         mkdir downloads
-        cd downloads
-        wget --no-parent --recursive --accept '*' https://www.cafopfm.gov.bd/uploads/
-        ls -al
+        python3 << 'EOF'
+        import os
+        import threading
+        import requests
+        from urllib.parse import urljoin
+
+        # Base URL
+        BASE_URL = "https://www.cafopfm.gov.bd/uploads/"
+
+        # Directory to save downloaded files
+        DOWNLOAD_DIR = "downloads"
+        os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
+        # Function to download a single file
+        def download_file(file_name):
+            try:
+                url = urljoin(BASE_URL, file_name)
+                response = requests.get(url, stream=True)
+                if response.status_code == 200:
+                    with open(os.path.join(DOWNLOAD_DIR, file_name), 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            f.write(chunk)
+                    print(f"Downloaded: {file_name}")
+                else:
+                    print(f"Failed to download: {file_name}, Status code: {response.status_code}")
+            except Exception as e:
+                print(f"Error downloading {file_name}: {e}")
+
+        # Get the list of files from the server (modify this if directory listing is not enabled)
+        response = requests.get(BASE_URL)
+        if response.status_code == 200:
+            # Extract file names (this part may need adjustment based on the server's response format)
+            file_names = [line.split('"')[1] for line in response.text.splitlines() if 'href="' in line]
+        else:
+            print("Failed to fetch file list.")
+            file_names = []
+
+        # Use threading for parallel downloads
+        threads = []
+        for file_name in file_names:
+            thread = threading.Thread(target=download_file, args=(file_name,))
+            threads.append(thread)
+            thread.start()
+
+            # Limit the number of concurrent threads
+            if len(threads) >= 50:  # Adjust thread limit as needed
+                for t in threads:
+                    t.join()
+                threads = []
+
+        # Wait for all threads to finish
+        for t in threads:
+            t.join()
+
+        print("All downloads completed.")
+        EOF
 
     # Add the downloaded files to the repository
     - name: Add Files to Repo
